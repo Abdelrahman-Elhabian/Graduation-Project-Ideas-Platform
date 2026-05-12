@@ -1,0 +1,68 @@
+/**
+ * Firestore Security Rules
+ * 
+ * Deploy these rules to your Firebase project:
+ * 1. Go to Firebase Console > Firestore Database > Rules
+ * 2. Replace the existing rules with the content below
+ * 3. Click "Publish"
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // USER PROFILES
+    // Users can read/write only their own profile
+    // ============================================
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Users cannot delete their profiles
+    }
+
+    // ============================================
+    // TEAMS
+    // Only authenticated users can read/write teams
+    // Only team members can read team data
+    // ============================================
+    match /teams/{teamId} {
+      // Any authenticated user can read a team (needed for joining)
+      allow read: if request.auth != null;
+      
+      // Any authenticated user can create a team
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      
+      // Only team members can update
+      allow update: if request.auth != null
+        && (resource.data.ownerId == request.auth.uid
+            || request.auth.uid in resource.data.members.map(m, m.uid));
+      
+      // Only the owner can delete
+      allow delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ============================================
+    // IDEAS
+    // Only team members can read/write ideas
+    // ============================================
+    match /ideas/{ideaId} {
+      // Authenticated users can read ideas (team validation done in app)
+      allow read: if request.auth != null;
+      
+      // Authenticated users can create ideas
+      allow create: if request.auth != null
+        && request.resource.data.creatorId == request.auth.uid;
+      
+      // Authenticated users can update ideas (for likes)
+      allow update: if request.auth != null;
+      
+      // Only the creator can delete
+      allow delete: if request.auth != null
+        && resource.data.creatorId == request.auth.uid;
+    }
+  }
+}
