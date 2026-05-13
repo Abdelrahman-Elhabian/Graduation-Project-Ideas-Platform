@@ -1,7 +1,12 @@
 /**
  * Team Service
  * Handles all team-related Firestore operations
- * Encrypts sensitive text fields + teamId (deterministic) in Firestore
+ * All data in Firestore is encrypted — including document IDs
+ * 
+ * Flow:
+ * - Plain team ID (e.g. "ABC123") is shared between users
+ * - Document ID = encryptDeterministic("ABC123") — so it's unreadable in console
+ * - All field values are also encrypted
  */
 
 import {
@@ -39,6 +44,15 @@ const decryptMember = (member) => ({
 });
 
 /**
+ * Convert a plain team ID to an encrypted document ID
+ * Uses deterministic encryption so the same plain ID always maps to the same doc ID
+ * Replaces / with _ to make it a valid Firestore document ID
+ */
+const toDocId = (plainTeamId) => {
+  return encryptDeterministic(plainTeamId).replace(/\//g, '_').replace(/\+/g, '-');
+};
+
+/**
  * Generate a unique team ID (6 characters, alphanumeric)
  */
 const generateTeamId = () => {
@@ -57,10 +71,10 @@ export const createTeam = async (teamName, userId, userName) => {
   try {
     let teamId = generateTeamId();
 
-    // Ensure unique team ID
+    // Ensure unique team ID (check using encrypted doc ID)
     let exists = true;
     while (exists) {
-      const docSnap = await getDoc(doc(db, 'teams', teamId));
+      const docSnap = await getDoc(doc(db, 'teams', toDocId(teamId)));
       if (!docSnap.exists()) {
         exists = false;
       } else {
@@ -68,7 +82,7 @@ export const createTeam = async (teamName, userId, userName) => {
       }
     }
 
-    // Encrypt teamId deterministically for storage
+    const encryptedDocId = toDocId(teamId);
     const encryptedTeamId = encryptDeterministic(teamId);
 
     const teamData = {
@@ -90,7 +104,8 @@ export const createTeam = async (teamName, userId, userName) => {
 
     // Encrypt top-level text fields
     const encryptedTeam = encryptFields(teamData, ENCRYPTED_TEAM_FIELDS);
-    await setDoc(doc(db, 'teams', teamId), encryptedTeam);
+    // Use encrypted doc ID
+    await setDoc(doc(db, 'teams', encryptedDocId), encryptedTeam);
 
     // Update user's teamId (encrypted) in their profile
     await setDoc(doc(db, 'users', userId), {
@@ -111,7 +126,8 @@ export const createTeam = async (teamName, userId, userName) => {
 export const joinTeam = async (teamId, userId, userName) => {
   try {
     const plainTeamId = teamId.toUpperCase();
-    const teamRef = doc(db, 'teams', plainTeamId);
+    const encryptedDocId = toDocId(plainTeamId);
+    const teamRef = doc(db, 'teams', encryptedDocId);
     const teamSnap = await getDoc(teamRef);
 
     if (!teamSnap.exists()) {
@@ -126,7 +142,6 @@ export const joinTeam = async (teamId, userId, userName) => {
       return { team: null, error: 'You are already a member of this team.' };
     }
 
-    // Encrypt teamId deterministically
     const encryptedTeamId = encryptDeterministic(plainTeamId);
 
     // Add user to team members (encrypt displayName)
@@ -158,16 +173,18 @@ export const joinTeam = async (teamId, userId, userName) => {
 };
 
 /**
- * Get team data by team ID (plain 6-char code, used as doc ID)
+ * Get team data by plain team ID
+ * Converts to encrypted doc ID for lookup
  */
 export const getTeam = async (teamId) => {
   try {
-    const docRef = doc(db, 'teams', teamId);
+    const encryptedDocId = toDocId(teamId);
+    const docRef = doc(db, 'teams', encryptedDocId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const rawData = docSnap.data();
       const teamData = decryptFields(rawData, ENCRYPTED_TEAM_FIELDS);
-      teamData.teamId = teamId; // Use plain teamId
+      teamData.teamId = teamId; // Use plain teamId for display
       teamData.members = (rawData.members || []).map(decryptMember);
       return { team: teamData, error: null };
     }
@@ -182,7 +199,8 @@ export const getTeam = async (teamId) => {
  */
 export const leaveTeam = async (teamId, userId) => {
   try {
-    const teamRef = doc(db, 'teams', teamId);
+    const encryptedDocId = toDocId(teamId);
+    const teamRef = doc(db, 'teams', encryptedDocId);
     const teamSnap = await getDoc(teamRef);
 
     if (!teamSnap.exists()) {
