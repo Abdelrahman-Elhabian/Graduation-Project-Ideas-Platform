@@ -1,6 +1,6 @@
 /**
  * Team Dashboard Page
- * Shows team info, members, and project ideas with search and sort
+ * Shows team info, members, ideas with search, category filter, and sort
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from '../context/SnackbarContext';
 import { getTeam } from '../services/teamService';
 import { getTeamIdeas } from '../services/ideaService';
-import { getInitials } from '../utils/helpers';
+import { getInitials, CATEGORIES } from '../utils/helpers';
 import PageHeader from '../components/PageHeader';
 import IdeaCard from '../components/IdeaCard';
 import EmptyState from '../components/EmptyState';
@@ -36,6 +36,7 @@ const TeamDashboard = () => {
   const [ideas, setIdeas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [sortBy, setSortBy] = useState('newest');
 
   const teamId = userProfile?.teamId;
@@ -62,7 +63,9 @@ const TeamDashboard = () => {
   // Filter and sort ideas
   const filteredIdeas = ideas
     .filter((idea) => {
-      return !searchQuery || idea.title?.toLowerCase().includes(searchQuery.toLowerCase()) || idea.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !searchQuery || idea.title?.toLowerCase().includes(searchQuery.toLowerCase()) || idea.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = !categoryFilter || idea.category === categoryFilter;
+      return matchesSearch && matchesCategory;
     })
     .sort((a, b) => {
       if (sortBy === 'likes') return (b.likesCount || 0) - (a.likesCount || 0);
@@ -163,15 +166,26 @@ const TeamDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Search & Sort */}
+      {/* Search, Category & Sort */}
       <Card sx={{ mb: 4, '&:hover': { transform: 'none' } }}>
         <CardContent sx={{ p: 3 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, sm: 8 }}>
+            <Grid size={{ xs: 12, sm: 5 }}>
               <TextField fullWidth size="small" placeholder="Search ideas..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                 slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 20, color: 'text.secondary' }} /></InputAdornment> } }} />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Category</InputLabel>
+                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} label="Category">
+                  <MenuItem value="">All Categories</MenuItem>
+                  {CATEGORIES.map((cat) => (
+                    <MenuItem key={cat.value} value={cat.value}>{cat.icon} {cat.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Sort</InputLabel>
                 <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} label="Sort">
@@ -195,7 +209,7 @@ const TeamDashboard = () => {
           ))}
         </Grid>
       ) : ideas.length > 0 ? (
-        <EmptyState icon={<SearchIcon sx={{ fontSize: 48, color: '#7C3AED' }} />} title="No matching ideas" description="Try adjusting your search" />
+        <EmptyState icon={<SearchIcon sx={{ fontSize: 48, color: '#7C3AED' }} />} title="No matching ideas" description="Try adjusting your search or filters" />
       ) : (
         <EmptyState icon={<IdeaIcon sx={{ fontSize: 48, color: '#7C3AED' }} />} title="No ideas yet" description="Be the first to share a project idea with your team!" actionLabel="Add First Idea" onAction={() => navigate('/dashboard/add-idea')} />
       )}

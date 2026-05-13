@@ -1,17 +1,16 @@
 /**
  * Authentication Context
  * Provides global authentication state throughout the application
- * Uses Firebase onAuthStateChanged listener to track auth state
- * Decrypts encrypted user profile fields from Firestore
+ * Decrypts encrypted user profile fields (including teamId) from Firestore
  */
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { encryptFields, decryptFields } from '../utils/encryption';
+import { encryptFields, decryptFields, decryptDeterministic } from '../utils/encryption';
 
-// Same fields that authService encrypts
+// Non-deterministic encrypted fields
 const ENCRYPTED_USER_FIELDS = ['displayName', 'email'];
 
 const AuthContext = createContext(null);
@@ -29,27 +28,34 @@ export const useAuth = () => {
 
 /**
  * Auth Provider Component
- * Wraps the application to provide authentication state
  */
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  /**
+   * Process raw Firestore profile data: decrypt fields
+   */
+  const processProfile = (rawData) => {
+    const profile = decryptFields(rawData, ENCRYPTED_USER_FIELDS);
+    // Decrypt teamId (deterministic encryption)
+    if (profile.teamId && typeof profile.teamId === 'string') {
+      profile.teamId = decryptDeterministic(profile.teamId);
+    }
+    return profile;
+  };
+
   useEffect(() => {
-    // Subscribe to auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
 
       if (user) {
-        // Fetch user profile from Firestore
         try {
           const docRef = doc(db, 'users', user.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            // Decrypt encrypted fields before setting state
-            const profile = decryptFields(docSnap.data(), ENCRYPTED_USER_FIELDS);
-            setUserProfile(profile);
+            setUserProfile(processProfile(docSnap.data()));
           } else {
             // Auto-create profile if user exists in Auth but not Firestore
             const newProfile = {
@@ -61,10 +67,8 @@ export const AuthProvider = ({ children }) => {
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             };
-            // Store encrypted version in Firestore
             const encryptedProfile = encryptFields(newProfile, ENCRYPTED_USER_FIELDS);
             await setDoc(docRef, encryptedProfile);
-            // Keep plain text in state for UI
             setUserProfile(newProfile);
           }
         } catch (error) {
@@ -77,7 +81,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
 
@@ -90,9 +93,7 @@ export const AuthProvider = ({ children }) => {
         const docRef = doc(db, 'users', currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          // Decrypt encrypted fields
-          const profile = decryptFields(docSnap.data(), ENCRYPTED_USER_FIELDS);
-          setUserProfile(profile);
+          setUserProfile(processProfile(docSnap.data()));
         }
       } catch (error) {
         console.error('Error refreshing profile:', error);

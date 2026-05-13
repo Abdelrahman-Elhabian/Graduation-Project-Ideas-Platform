@@ -1,15 +1,17 @@
 /**
  * Add Idea Page
- * Form to create a new project idea (title + description only)
+ * Form to create a new project idea (title, description, category)
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSnackbar } from '../context/SnackbarContext';
 import { createIdea } from '../services/ideaService';
+import { CATEGORIES } from '../utils/helpers';
 import PageHeader from '../components/PageHeader';
 import {
-  Box, Card, CardContent, TextField, Button, Typography, CircularProgress
+  Box, Card, CardContent, TextField, Button, Typography, CircularProgress,
+  FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import { Lightbulb as IdeaIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -21,7 +23,7 @@ const AddIdeaPage = () => {
   const { showSnackbar } = useSnackbar();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({ title: '', description: '' });
+  const [formData, setFormData] = useState({ title: '', description: '', category: '' });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -37,6 +39,7 @@ const AddIdeaPage = () => {
     else if (formData.title.trim().length < 5) errs.title = 'Title must be at least 5 characters';
     if (!formData.description.trim()) errs.description = 'Description is required';
     else if (formData.description.trim().length < 20) errs.description = 'Description must be at least 20 characters';
+    if (!formData.category) errs.category = 'Please select a category';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -54,6 +57,7 @@ const AddIdeaPage = () => {
     const ideaData = {
       title: formData.title.trim(),
       description: formData.description.trim(),
+      category: formData.category,
       creatorId: currentUser.uid,
       creatorName: displayName
     };
@@ -85,6 +89,30 @@ const AddIdeaPage = () => {
 
             <Box component="form" onSubmit={handleSubmit} noValidate>
               <TextField fullWidth id="idea-title" name="title" label="Project Title" placeholder="e.g. AI-Powered Student Advisor" value={formData.title} onChange={handleChange} error={!!errors.title} helperText={errors.title} sx={{ mb: 2.5 }} />
+
+              <FormControl fullWidth error={!!errors.category} sx={{ mb: 2.5 }}>
+                <InputLabel id="category-label">Category</InputLabel>
+                <Select
+                  labelId="category-label"
+                  id="idea-category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  label="Category"
+                >
+                  {CATEGORIES.map((cat) => (
+                    <MenuItem key={cat.value} value={cat.value}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Typography sx={{ fontSize: '1.1rem' }}>{cat.icon}</Typography>
+                        <Typography>{cat.label}</Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.category && (
+                  <Typography variant="caption" sx={{ color: 'error.main', mt: 0.5, ml: 1.5 }}>{errors.category}</Typography>
+                )}
+              </FormControl>
 
               <TextField fullWidth id="idea-description" name="description" label="Description" placeholder="Describe your project idea, its goals, features, and impact..." value={formData.description} onChange={handleChange} error={!!errors.description} helperText={errors.description} multiline rows={6} sx={{ mb: 3.5 }} />
 

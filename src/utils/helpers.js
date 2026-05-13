@@ -130,3 +130,40 @@ export const getDifficultyLabel = (difficulty) => {
   const level = DIFFICULTY_LEVELS.find(l => l.value === difficulty);
   return level ? level.label : difficulty;
 };
+
+/**
+ * Categories for project ideas
+ */
+export const CATEGORIES = [
+  { value: 'business', label: 'Business', color: '#7C3AED', icon: '💼' },
+  { value: 'medical', label: 'Medical', color: '#EF4444', icon: '🏥' },
+  { value: 'sports', label: 'Sports & Fitness', color: '#F59E0B', icon: '⚽' },
+  { value: 'healthcare', label: 'Healthcare', color: '#10B981', icon: '❤️' },
+  { value: 'agriculture', label: 'Agriculture', color: '#84CC16', icon: '🌱' },
+  { value: 'education', label: 'Education', color: '#06B6D4', icon: '📚' },
+  { value: 'industry', label: 'Industry', color: '#F97316', icon: '🏭' }
+];
+
+/**
+ * Get color for category
+ */
+export const getCategoryColor = (category) => {
+  const cat = CATEGORIES.find(c => c.value === category);
+  return cat ? cat.color : '#94A3B8';
+};
+
+/**
+ * Get label for category
+ */
+export const getCategoryLabel = (category) => {
+  const cat = CATEGORIES.find(c => c.value === category);
+  return cat ? cat.label : category;
+};
+
+/**
+ * Get icon for category
+ */
+export const getCategoryIcon = (category) => {
+  const cat = CATEGORIES.find(c => c.value === category);
+  return cat ? cat.icon : '💡';
+};

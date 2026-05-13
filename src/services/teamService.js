@@ -1,7 +1,7 @@
 /**
  * Team Service
  * Handles all team-related Firestore operations
- * Encrypts sensitive text fields in Firestore
+ * Encrypts sensitive text fields + teamId (deterministic) in Firestore
  */
 
 import {
@@ -17,9 +17,9 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { encryptText, decryptText, encryptFields, decryptFields } from '../utils/encryption';
+import { encryptText, decryptText, encryptFields, decryptFields, encryptDeterministic, decryptDeterministic } from '../utils/encryption';
 
-// Fields to encrypt in team documents
+// Fields to encrypt (non-deterministic)
 const ENCRYPTED_TEAM_FIELDS = ['name', 'ownerName'];
 
 /**
@@ -68,8 +68,11 @@ export const createTeam = async (teamName, userId, userName) => {
       }
     }
 
+    // Encrypt teamId deterministically for storage
+    const encryptedTeamId = encryptDeterministic(teamId);
+
     const teamData = {
-      teamId,
+      teamId: encryptedTeamId,
       name: teamName,
       ownerId: userId,
       ownerName: userName,
@@ -85,29 +88,30 @@ export const createTeam = async (teamName, userId, userName) => {
       updatedAt: serverTimestamp()
     };
 
-    // Encrypt top-level fields
+    // Encrypt top-level text fields
     const encryptedTeam = encryptFields(teamData, ENCRYPTED_TEAM_FIELDS);
     await setDoc(doc(db, 'teams', teamId), encryptedTeam);
 
-    // Update user's teamId in their profile (merge to create if missing)
+    // Update user's teamId (encrypted) in their profile
     await setDoc(doc(db, 'users', userId), {
-      teamId,
+      teamId: encryptedTeamId,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
     // Return unencrypted data for immediate UI use
-    return { team: { ...teamData, teamId }, error: null };
+    return { team: { ...teamData, teamId, name: teamName, ownerName: userName }, error: null };
   } catch (error) {
     return { team: null, error: error.message };
   }
 };
 
 /**
- * Join an existing team by team ID
+ * Join an existing team by team ID (user enters the plain 6-char code)
  */
 export const joinTeam = async (teamId, userId, userName) => {
   try {
-    const teamRef = doc(db, 'teams', teamId.toUpperCase());
+    const plainTeamId = teamId.toUpperCase();
+    const teamRef = doc(db, 'teams', plainTeamId);
     const teamSnap = await getDoc(teamRef);
 
     if (!teamSnap.exists()) {
@@ -122,6 +126,9 @@ export const joinTeam = async (teamId, userId, userName) => {
       return { team: null, error: 'You are already a member of this team.' };
     }
 
+    // Encrypt teamId deterministically
+    const encryptedTeamId = encryptDeterministic(plainTeamId);
+
     // Add user to team members (encrypt displayName)
     await updateDoc(teamRef, {
       members: arrayUnion(encryptMember({
@@ -133,24 +140,25 @@ export const joinTeam = async (teamId, userId, userName) => {
       updatedAt: serverTimestamp()
     });
 
-    // Update user's teamId (merge to create if missing)
+    // Update user's teamId (encrypted)
     await setDoc(doc(db, 'users', userId), {
-      teamId: teamId.toUpperCase(),
+      teamId: encryptedTeamId,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
     // Decrypt for return
     const teamData = decryptFields(rawData, ENCRYPTED_TEAM_FIELDS);
+    teamData.teamId = plainTeamId;
     teamData.members = rawData.members.map(decryptMember);
 
-    return { team: { ...teamData, teamId: teamId.toUpperCase() }, error: null };
+    return { team: teamData, error: null };
   } catch (error) {
     return { team: null, error: error.message };
   }
 };
 
 /**
- * Get team data by team ID (decrypts encrypted fields)
+ * Get team data by team ID (plain 6-char code, used as doc ID)
  */
 export const getTeam = async (teamId) => {
   try {
@@ -158,9 +166,8 @@ export const getTeam = async (teamId) => {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const rawData = docSnap.data();
-      // Decrypt top-level fields
       const teamData = decryptFields(rawData, ENCRYPTED_TEAM_FIELDS);
-      // Decrypt member names
+      teamData.teamId = teamId; // Use plain teamId
       teamData.members = (rawData.members || []).map(decryptMember);
       return { team: teamData, error: null };
     }
@@ -190,7 +197,7 @@ export const leaveTeam = async (teamId, userId) => {
       updatedAt: serverTimestamp()
     });
 
-    // Remove teamId from user profile (merge to create if missing)
+    // Remove teamId from user profile
     await setDoc(doc(db, 'users', userId), {
       teamId: null,
       updatedAt: serverTimestamp()
