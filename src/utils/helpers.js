@@ -141,7 +141,8 @@ export const CATEGORIES = [
   { value: 'healthcare', label: 'Healthcare', color: '#10B981', icon: '❤️' },
   { value: 'agriculture', label: 'Agriculture', color: '#84CC16', icon: '🌱' },
   { value: 'education', label: 'Education', color: '#06B6D4', icon: '📚' },
-  { value: 'industry', label: 'Industry', color: '#F97316', icon: '🏭' }
+  { value: 'industry', label: 'Industry', color: '#F97316', icon: '🏭' },
+  { value: 'other', label: 'Other', color: '#94A3B8', icon: '📌' }
 ];
 
 /**
