@@ -35,10 +35,8 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.ownerId == request.auth.uid;
       
-      // Only team members can update
-      allow update: if request.auth != null
-        && (resource.data.ownerId == request.auth.uid
-            || request.auth.uid in resource.data.members.map(m, m.uid));
+      // Any authenticated user can update (needed so new users can join)
+      allow update: if request.auth != null;
       
       // Only the owner can delete
       allow delete: if request.auth != null
